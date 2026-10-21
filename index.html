@@ -137,6 +137,15 @@ input[type=range]{width:100%;accent-color:var(--cyan);margin:0}
       <span class="hint" style="margin-top:-8px">אפשר גם לגרור או להדביק תמונה.</span>
 
       <div class="group">
+        <div class="label">סגנון</div>
+        <div class="seg" id="presetSeg" role="group" aria-label="סגנון">
+          <button type="button" data-v="art" aria-pressed="true">ציור על שחור</button>
+          <button type="button" data-v="full" aria-pressed="false">תמונה מלאה</button>
+        </div>
+        <span class="hint" id="presetHint"></span>
+      </div>
+
+      <div class="group">
         <div class="label">רקע להסרה</div>
         <div class="seg" id="modeSeg" role="group" aria-label="רקע להסרה">
           <button type="button" data-v="dark" aria-pressed="true">שחור</button>
@@ -284,8 +293,16 @@ function outSize(){
 function effCell(){ const o = outSize(); return P.autoCell ? Math.min(40, Math.max(4, Math.round(Math.max(o.w,o.h)/330))) : P.cell; }
 function softDraw(ctx, img, args, blurPx){ try{ ctx.filter = blurPx > 0.15 ? "blur(" + blurPx.toFixed(2) + "px)" : "none"; }catch(e){} ctx.drawImage(img, ...args); try{ ctx.filter = "none"; }catch(e){} }
 function syncCellUi(){ const c = effCell(); $("cell").value = c; $("cellO").textContent = (P.autoCell ? "אוטו · " : "") + c + "px"; }
+function presets(){ return { art:{mode:"dark",lo:28,hi:150}, full:{mode:"dark",lo:12,hi:90} }; }
+function syncPreset(){
+  const ps = presets(), k = Object.keys(ps).find(n => ps[n].mode === P.mode && ps[n].lo === P.lo && ps[n].hi === P.hi) || "";
+  $("presetSeg").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === k)));
+  $("presetHint").textContent = k === "art" ? "כל המעברים והצללים הופכים לנקודות. מתאים לציור על רקע שחור."
+    : k === "full" ? "הצבעים נשארים מלאים, ונקודות מופיעות רק במעבר לשחור." : "הגדרות מותאמות אישית.";
+}
 function updateSpecs(){
   syncCellUi();
+  syncPreset();
   const o = outSize();
   $("sPx").textContent = o.w + "×" + o.h;
   $("sCm").textContent = (o.w/300*2.54).toFixed(1) + "×" + (o.h/300*2.54).toFixed(1);
@@ -352,6 +369,13 @@ function bindSeg(id, key, conv){
   sync();
 }
 bindSeg("modeSeg","mode"); bindSeg("scaleSeg","scale",Number); bindSeg("shapeSeg","shape"); bindSeg("bgSeg","bg");
+$("presetSeg").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  Object.assign(P, presets()[b.dataset.v]);
+  $("lo").value = P.lo; $("loO").textContent = P.lo; $("hi").value = P.hi; $("hiO").textContent = P.hi;
+  $("modeSeg").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.v === P.mode)));
+  syncPreset(); save(); schedule();
+});
 $("plate").dataset.bg = P.bg; $("loupeBox").dataset.bg = P.bg;
 
 const fmt = { lo:v=>v, hi:v=>v, cell:v=>v+"px", angle:v=>v+"°", gain:v=>"×"+(v/10).toFixed(1) };
