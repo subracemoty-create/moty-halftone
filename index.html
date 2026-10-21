@@ -139,7 +139,7 @@ input[type=range]{width:100%;accent-color:var(--cyan);margin:0}
       <div class="group">
         <div class="label">סגנון</div>
         <div class="seg" id="presetSeg" role="group" aria-label="סגנון">
-          <button type="button" data-v="art" aria-pressed="true">ציור על שחור</button>
+          <button type="button" data-v="art" aria-pressed="false">ציור על שחור</button>
           <button type="button" data-v="full" aria-pressed="false">תמונה מלאה</button>
         </div>
         <span class="hint" id="presetHint"></span>
@@ -198,6 +198,7 @@ input[type=range]{width:100%;accent-color:var(--cyan);margin:0}
         <input type="range" id="gain" min="10" max="30" value="20">
       </div>
       <label class="check"><input type="checkbox" id="trim" checked> חיתוך שוליים שקופים</label>
+      <button type="button" class="btn" id="resetAll">איפוס להגדרות המקוריות</button>
 
       <div class="divider"></div>
 
@@ -212,7 +213,7 @@ input[type=range]{width:100%;accent-color:var(--cyan);margin:0}
 (function(){
 "use strict";
 const $ = id => document.getElementById(id);
-const P = { mode:"dark", scale:3, lo:28, hi:150, cell:14, autoCell:true, angle:45, shape:"round", gain:2.0, trim:true, bg:"black" };
+const P = { mode:"dark", scale:3, lo:28, hi:150, cell:14, autoCell:true, preset:"", before:null, angle:45, shape:"round", gain:2.0, trim:true, bg:"black" };
 try{ const s = JSON.parse(localStorage.getItem("motyHalftone")||"null"); if(s) Object.assign(P, s); }catch(e){}
 const save = () => { try{ localStorage.setItem("motyHalftone", JSON.stringify(P)); }catch(e){} };
 
@@ -295,10 +296,10 @@ function softDraw(ctx, img, args, blurPx){ try{ ctx.filter = blurPx > 0.15 ? "bl
 function syncCellUi(){ const c = effCell(); $("cell").value = c; $("cellO").textContent = (P.autoCell ? "אוטו · " : "") + c + "px"; }
 function presets(){ return { art:{mode:"dark",lo:28,hi:150}, full:{mode:"dark",lo:12,hi:90} }; }
 function syncPreset(){
-  const ps = presets(), k = Object.keys(ps).find(n => ps[n].mode === P.mode && ps[n].lo === P.lo && ps[n].hi === P.hi) || "";
+  const k = P.preset || "";
   $("presetSeg").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === k)));
   $("presetHint").textContent = k === "art" ? "כל המעברים והצללים הופכים לנקודות. מתאים לציור על רקע שחור."
-    : k === "full" ? "הצבעים נשארים מלאים, ונקודות מופיעות רק במעבר לשחור." : "הגדרות מותאמות אישית.";
+    : k === "full" ? "הצבעים נשארים מלאים, ונקודות מופיעות רק במעבר לשחור." : "ללא סגנון: ההגדרות שלך נשמרות. לחיצה על סגנון מחילה אותו, ולחיצה נוספת מבטלת ומחזירה את הערכים שלך.";
 }
 function updateSpecs(){
   syncCellUi();
@@ -362,7 +363,7 @@ function bindSeg(id, key, conv){
   const sync = () => el.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(String(P[key]) === b.dataset.v)));
   el.addEventListener("click", e => {
     const b = e.target.closest("button"); if (!b) return;
-    P[key] = conv ? conv(b.dataset.v) : b.dataset.v; sync(); save();
+    P[key] = conv ? conv(b.dataset.v) : b.dataset.v; if (key === "mode"){ P.preset = ""; P.before = null; syncPreset(); } sync(); save();
     if (key === "bg"){ $("plate").dataset.bg = P.bg; $("loupeBox").dataset.bg = P.bg; }
     else { if (key === "scale") lens = null; schedule(); }
   });
@@ -371,7 +372,9 @@ function bindSeg(id, key, conv){
 bindSeg("modeSeg","mode"); bindSeg("scaleSeg","scale",Number); bindSeg("shapeSeg","shape"); bindSeg("bgSeg","bg");
 $("presetSeg").addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b) return;
-  Object.assign(P, presets()[b.dataset.v]);
+  const v = b.dataset.v;
+  if (P.preset === v){ if (P.before) Object.assign(P, P.before); P.preset = ""; P.before = null; }
+  else { if (!P.preset) P.before = { mode:P.mode, lo:P.lo, hi:P.hi }; Object.assign(P, presets()[v]); P.preset = v; }
   $("lo").value = P.lo; $("loO").textContent = P.lo; $("hi").value = P.hi; $("hiO").textContent = P.hi;
   $("modeSeg").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.v === P.mode)));
   syncPreset(); save(); schedule();
@@ -387,6 +390,7 @@ const fmt = { lo:v=>v, hi:v=>v, cell:v=>v+"px", angle:v=>v+"°", gain:v=>"×"+(v
   el.addEventListener("input", () => {
     upd();
     if (k === "cell"){ P.autoCell = false; $("autoCell").checked = false; }
+    if (k === "lo" || k === "hi"){ P.preset = ""; P.before = null; syncPreset(); }
     if (k === "lo" && P.lo >= P.hi - 5){ P.hi = Math.min(255, P.lo + 6); $("hi").value = P.hi; $("hiO").textContent = P.hi; }
     if (k === "hi" && P.hi <= P.lo + 5){ P.lo = Math.max(0, P.hi - 6); $("lo").value = P.lo; $("loO").textContent = P.lo; }
     save(); schedule();
@@ -394,6 +398,7 @@ const fmt = { lo:v=>v, hi:v=>v, cell:v=>v+"px", angle:v=>v+"°", gain:v=>"×"+(v
 });
 $("trim").checked = P.trim;
 $("trim").addEventListener("change", e => { P.trim = e.target.checked; save(); });
+$("resetAll").addEventListener("click", () => { try{ localStorage.removeItem("motyHalftone"); }catch(e){} location.reload(); });
 $("autoCell").checked = P.autoCell;
 $("autoCell").addEventListener("change", e => { P.autoCell = e.target.checked; if (!P.autoCell) P.cell = Number($("cell").value); save(); schedule(); });
 
